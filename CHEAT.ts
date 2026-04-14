@@ -1,12 +1,12 @@
-import { director, Director, error, Node } from "cc";
+import { director, Director, error } from "cc";
 
 window['nodeU'] = eno.NodeUtils;
 
 export class Macteo {
-    private _userId: string = "game_macteodola";
+    private _userId: string = "";
     private get userId(): string {
         if (!this._userId) {
-            const  gameState  = this._getGameState();
+            const gameState = this._getGameState();
             if (gameState) {
                 this._userId = gameState.networkBridge?.getUserId()
             }
@@ -17,40 +17,23 @@ export class Macteo {
 
 
     private _gameId = null;
-    private get gameId(): string{
-        if (this._gameId == null){
-            this._gameId = this.recursiveFindGameID();
+    private get gameId(): string {
+        if (!this._gameId) {
+            const gameState = this._getGameState();
+            this._gameId = gameState.networkBridge?.gameId;
         }
 
         return this._gameId;
     }
 
     matrixCols: string[] = [
-        '2,4,5,6', 
-        '3,3,3,3', 
-        '3,3,3,3', 
-        '3,3,3,3', 
+        '2,4,5,6',
+        '3,3,3,3',
+        '3,3,3,3',
+        '3,3,3,3',
         '3,3,3,3'
     ];
     cheat: boolean = false;
-
-    private recursiveFindGameID(node?: Node): string {
-        const rootNode = node ?? director.getScene();
-        const rootNodeId = eno.NodeUtils.getGameIdFromNode(rootNode);
-        if (rootNodeId) {
-            return rootNodeId;
-        }
-
-        const children = rootNode.children;
-        for (const child of children) {
-            const childId = this.recursiveFindGameID(child);
-            if (childId) {
-                return childId;
-            }
-        }
-
-        return '';
-    }
 
     setupDatGUI(): void {
 
@@ -83,7 +66,6 @@ export class Macteo {
         gui.add(this, 'cheat').name('Cheat');
 
         this._setupMatrixGUI(gui);
-        this._interceptClientSendRequest();
     }
 
     private readonly _SPIN_EVENTS = [
@@ -95,19 +77,19 @@ export class Macteo {
         'client-respin-trial-request',
     ];
 
-    private _getGameState():   any  {
+    private _getGameState(): any {
         const canvas = (window as any).cc?.find('Canvas');
         const gameDirector = canvas?.getComponentInChildren('Director') ?? canvas?.getComponentInChildren('GameDirector');
-        const isBaseV2 = !!gameDirector?.gameLogic?._gameStateManager?._gameState;
         const gameState = gameDirector?.gameStateManager ?? gameDirector?.gameLogic?._gameStateManager?._gameState;
-        return  gameState ;
+        return gameState;
     }
 
-    private _interceptClientSendRequest(): void {
-        const { gameState, isBaseV2: _ } = this._getGameState();
+    interceptClientSendRequest(): boolean{
+        this.log('start interceptClientSendRequest')
+        const  gameState  = this._getGameState();
         if (!gameState) {
             this.log('gameState not found');
-            return;
+            return false;
         }
 
         if (!gameState._orgClientSendRequest) {
@@ -132,6 +114,7 @@ export class Macteo {
         };
 
         this.log('_clientSendRequest intercepted');
+        return true;
     }
 
     private _setupMatrixGUI(gui: dat.GUI): void {
@@ -278,9 +261,28 @@ export class Macteo {
 const macteo = new Macteo();
 window['macteo'] = macteo;
 
-director.once(Director.EVENT_END_FRAME, () => {
+director.once(Director.EVENT_AFTER_SCENE_LAUNCH, () => {
     macteo.setupDatGUI();
+    tryIntercept();
 });
+
+const step = 1;
+async function tryIntercept(): Promise<void>{
+    let isIntercepted = false;
+    while(isIntercepted == false) {
+        isIntercepted = macteo.interceptClientSendRequest();
+        await delay(step);
+    }
+}
+
+async function delay(duration): Promise<void> {
+    return new Promise<void>(resolve => {
+        setInterval(() => {
+            resolve();
+        }, duration * 1000);
+    })
+}
+
 
 export default macteo;
 
