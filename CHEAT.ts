@@ -1,6 +1,5 @@
 import { director, Director, error } from "cc";
-
-window['nodeU'] = eno.NodeUtils;
+import { PREVIEW } from "cc/env";
 
 export class Macteo {
     private _userId: string = "";
@@ -35,7 +34,36 @@ export class Macteo {
     ];
     cheat: boolean = false;
 
+    private readonly _STORAGE_KEY = 'macteo_cheat_9766';
+
+    private _saveToStorage(): void {
+        const data = {
+            matrixCols: this.matrixCols,
+            cheat: this.cheat,
+        };
+        localStorage.setItem(this._STORAGE_KEY, JSON.stringify(data));
+    }
+
+    private _loadFromStorage(): void {
+        const raw = localStorage.getItem(this._STORAGE_KEY);
+        if (!raw) {
+            return;
+        }
+        try {
+            const data = JSON.parse(raw);
+            if (data.matrixCols) {
+                this.matrixCols = data.matrixCols;
+            }
+            if (data.cheat !== undefined) {
+                this.cheat = data.cheat;
+            }
+        } catch (e) {
+            // ignore corrupt data
+        }
+    }
+
     setupDatGUI(): void {
+        this._loadFromStorage();
 
         const gui = new dat.GUI();
 
@@ -49,7 +77,6 @@ export class Macteo {
 
         let paused = false;
         const actions = {
-            clearSession: () => this.clearSession(),
             pauseResume: () => {
                 paused = !paused;
                 if (paused) {
@@ -60,12 +87,12 @@ export class Macteo {
                 pauseResumeCtrl.name(paused ? 'Resume' : 'Pause');
             },
         };
-        gui.add(actions, 'clearSession').name('Clear Session');
         const pauseResumeCtrl = gui.add(actions, 'pauseResume').name('Pause');
 
-        gui.add(this, 'cheat').name('Cheat');
-
-        this._setupMatrixGUI(gui);
+        const cheatFolder = gui.addFolder('Cheat');
+        cheatFolder.add(this, 'cheat').name('Enable').onChange(() => this._saveToStorage());
+        cheatFolder.add({ clearSession: () => this.clearSession() }, 'clearSession').name('Clear Session');
+        this._setupMatrixGUI(cheatFolder);
     }
 
     private readonly _SPIN_EVENTS = [
@@ -117,17 +144,18 @@ export class Macteo {
         return true;
     }
 
-    private _setupMatrixGUI(gui: dat.GUI): void {
+    private _setupMatrixGUI(parent: dat.GUI): void {
         const COLS = 5;
         const matrixData: Record<string, string> = {};
         for (let col = 0; col < COLS; col++) {
             matrixData[`col${col}`] = this.matrixCols[col];
         }
 
-        const matrixFolder = gui.addFolder('Matrix');
+        const matrixFolder = parent.addFolder('Matrix');
         for (let col = 0; col < COLS; col++) {
             matrixFolder.add(matrixData, `col${col}`).name(`Col ${col}`).onChange((value: string) => {
                 this.matrixCols[col] = value;
+                this._saveToStorage();
             });
         }
     }
@@ -262,6 +290,9 @@ const macteo = new Macteo();
 window['macteo'] = macteo;
 
 director.once(Director.EVENT_AFTER_SCENE_LAUNCH, () => {
+    if (!PREVIEW) {
+        return;
+    }
     macteo.setupDatGUI();
     tryIntercept();
 });
