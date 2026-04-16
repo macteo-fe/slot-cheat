@@ -25,6 +25,8 @@ export class Macteo {
         return this._gameId;
     }
 
+    extraFields: Record<string, string> = {};
+
     matrixCols: string[] = [
         '2,4,5,6',
         '3,3,3,3',
@@ -40,6 +42,7 @@ export class Macteo {
         const data = {
             matrixCols: this.matrixCols,
             cheat: this.cheat,
+            extraFields: this.extraFields,
         };
         localStorage.setItem(this._STORAGE_KEY, JSON.stringify(data));
     }
@@ -56,6 +59,9 @@ export class Macteo {
             }
             if (data.cheat !== undefined) {
                 this.cheat = data.cheat;
+            }
+            if (data.extraFields) {
+                this.extraFields = data.extraFields;
             }
         } catch (e) {
             // ignore corrupt data
@@ -92,7 +98,36 @@ export class Macteo {
         const cheatFolder = gui.addFolder('Cheat');
         cheatFolder.add(this, 'cheat').name('Enable').onChange(() => this._saveToStorage());
         cheatFolder.add({ clearSession: () => this.clearSession() }, 'clearSession').name('Clear Session');
+        cheatFolder.add({
+            addField: () => {
+                const label = prompt('Field name:');
+                if (!label) {
+                    return;
+                }
+                this._addExtraField(cheatFolder, label, '');
+            }
+        }, 'addField').name('+ Add Field');
+        Object.keys(this.extraFields).forEach(label => {
+            this._addExtraField(cheatFolder, label, this.extraFields[label]);
+        });
         this._setupMatrixGUI(cheatFolder);
+    }
+
+    private _addExtraField(folder: dat.GUI, label: string, initialValue: string): void {
+        this.extraFields[label] = initialValue;
+        const data = { value: initialValue, remove: null };
+        const ctrl = folder.add(data, 'value').name(label).onChange((v: string) => {
+            this.extraFields[label] = v;
+            this._saveToStorage();
+        });
+        let removeCtrl: ReturnType<dat.GUI['add']>;
+        data.remove = () => {
+            delete this.extraFields[label];
+            this._saveToStorage();
+            (folder as any).remove(ctrl);
+            (folder as any).remove(removeCtrl);
+        };
+        removeCtrl = folder.add(data, 'remove').name(`✕ ${label}`);
     }
 
     private readonly _SPIN_EVENTS = [
@@ -128,8 +163,8 @@ export class Macteo {
             const { event, isCheated } = data;
             if (this.cheat && !isCheated && this._SPIN_EVENTS.indexOf(event) !== -1) {
                 const flat = this.matrixCols.join(',');
-                this.log('Intercepted:', event, '— sending cheat:', flat);
-                this.sendCheat({ matrixData: flat }).then(() => {
+                this.log('Intercepted:', event, '— sending cheat:', flat, this.extraFields);
+                this.sendCheat({ matrixData: flat, ...this.extraFields }).then(() => {
                     data.isCheated = true;
                     gameState._orgClientSendRequest(...params);
                 }).catch(() => {
