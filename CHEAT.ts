@@ -1,6 +1,12 @@
 import { director, Director, error } from "cc";
 import { PREVIEW } from "cc/env";
 
+enum CheatType {
+    OneShot = 'OneShot',
+    Disable = 'Disable',
+    Forever = 'Forever'
+}
+
 export class Macteo {
     private _userId: string = "";
     private get userId(): string {
@@ -26,6 +32,7 @@ export class Macteo {
     }
 
     extraFields: Record<string, string> = {};
+    private _cheatTypeCtrl: ReturnType<dat.GUI['add']> = null;
 
     matrixCols: string[] = [
         '2,4,5,6',
@@ -34,14 +41,14 @@ export class Macteo {
         '3,3,3,3',
         '3,3,3,3'
     ];
-    cheat: boolean = false;
+    cheatType: CheatType = CheatType.Disable;
 
     private readonly _STORAGE_KEY = 'macteo_cheat_9766';
 
     private _saveToStorage(): void {
         const data = {
             matrixCols: this.matrixCols,
-            cheat: this.cheat,
+            cheatType: this.cheatType,
             extraFields: this.extraFields,
         };
         localStorage.setItem(this._STORAGE_KEY, JSON.stringify(data));
@@ -57,8 +64,8 @@ export class Macteo {
             if (data.matrixCols) {
                 this.matrixCols = data.matrixCols;
             }
-            if (data.cheat !== undefined) {
-                this.cheat = data.cheat;
+            if (data.cheatType !== undefined) {
+                this.cheatType = data.cheatType;
             }
             if (data.extraFields) {
                 this.extraFields = data.extraFields;
@@ -96,7 +103,7 @@ export class Macteo {
         const pauseResumeCtrl = gui.add(actions, 'pauseResume').name('Pause');
 
         const cheatFolder = gui.addFolder('Cheat');
-        cheatFolder.add(this, 'cheat').name('Enable').onChange(() => this._saveToStorage());
+        this._cheatTypeCtrl = cheatFolder.add(this, 'cheatType', [CheatType.Disable, CheatType.OneShot, CheatType.Forever]).name('Cheat Type').onChange(() => this._saveToStorage());
         cheatFolder.add({ clearSession: () => this.clearSession() }, 'clearSession').name('Clear Session');
         cheatFolder.add({
             addField: () => {
@@ -161,9 +168,15 @@ export class Macteo {
         gameState._clientSendRequest = (...params: any[]) => {
             const data = params[params.length - 1];
             const { event, isCheated } = data;
-            if (this.cheat && !isCheated && this._SPIN_EVENTS.indexOf(event) !== -1) {
+            const shouldCheat = this.cheatType !== CheatType.Disable && !isCheated && this._SPIN_EVENTS.indexOf(event) !== -1;
+            if (shouldCheat) {
                 const flat = this.matrixCols.join(',');
                 this.log('Intercepted:', event, '— sending cheat:', flat, this.extraFields);
+                if (this.cheatType === CheatType.OneShot) {
+                    this.cheatType = CheatType.Disable;
+                    this._saveToStorage();
+                    this._cheatTypeCtrl?.updateDisplay();
+                }
                 this.sendCheat({ matrixData: flat, ...this.extraFields }).then(() => {
                     data.isCheated = true;
                     gameState._orgClientSendRequest(...params);
