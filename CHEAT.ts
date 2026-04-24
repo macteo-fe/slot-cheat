@@ -277,11 +277,11 @@ export class Macteo {
     }
 
     log(...args: any[]): void {
-        console.log('%cMACTEO', 'color: black; background: yellow; padding: 2px 4px;', ...args);
+        console.log('%cMACTEO', 'color: white; background: rgba(100,100,255,125); padding: 2px 4px;', ...args);
     }
 
     trace(...args: any[]): void {
-        console.groupCollapsed('%cMACTEO trace', 'color: black; background: yellow; padding: 2px 4px;', ...args);
+        console.groupCollapsed('%cMACTEO', 'color: white; background: rgba(100,100,255,125); padding: 2px 4px;', ...args);
         console.trace();
         console.groupEnd();
     }
